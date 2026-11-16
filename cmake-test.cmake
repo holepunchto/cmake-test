@@ -10,6 +10,7 @@ function(add_test_executable target)
 
   set(multi_value_keywords
     LINK
+    ARGS
     LABELS
     PROPERTIES
   )
@@ -47,7 +48,7 @@ function(add_test_executable target)
 
   add_test(
     NAME ${target}
-    COMMAND ${target}
+    COMMAND ${target} ${ARGV_ARGS}
     WORKING_DIRECTORY "${ARGV_WORKING_DIRECTORY}"
   )
 
@@ -70,6 +71,7 @@ function(add_test_executables)
 
   set(multi_value_keywords
     LINK
+    ARGS
     LABELS
     PROPERTIES
   )
