@@ -1,6 +1,6 @@
 {
   "name": "cmake-test",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Testing utilities for CMake",
   "files": [
     "*.cmake"
