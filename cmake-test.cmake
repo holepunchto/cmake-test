@@ -46,15 +46,14 @@ function(add_test_executable target)
       ${ARGV_LINK}
   )
 
-  # Windows searches the system directories before PATH, so a DLL that shares
-  # its name with a system DLL must sit next to the executable to be found.
   if(WIN32)
-    add_custom_command(
-      TARGET ${target}
-      POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy -t $<TARGET_FILE_DIR:${target}> $<TARGET_RUNTIME_DLLS:${target}>
-      COMMAND_EXPAND_LISTS
-    )
+    get_directory_property(executables test_runtime_dll_executables)
+
+    if(NOT executables)
+      cmake_language(DEFER CALL copy_test_runtime_dlls)
+    endif()
+
+    set_property(DIRECTORY APPEND PROPERTY test_runtime_dll_executables ${target})
   endif()
 
   add_test(
@@ -70,6 +69,38 @@ function(add_test_executable target)
       LABELS "${ARGV_LABELS}"
       ${ARGV_PROPERTIES}
   )
+endfunction()
+
+# Windows searches the system directories before PATH, so a DLL that shares its
+# name with a system DLL must sit next to the executable to be found. The DLLs
+# are copied once per directory, as concurrent copies of the same DLL from each
+# test fail with a sharing violation.
+function(copy_test_runtime_dlls)
+  get_directory_property(executables test_runtime_dll_executables)
+
+  set(dlls)
+
+  foreach(executable IN LISTS executables)
+    list(APPEND dlls "$<TARGET_RUNTIME_DLLS:${executable}>")
+  endforeach()
+
+  set(dlls "$<REMOVE_DUPLICATES:$<FILTER:${dlls},EXCLUDE,^$>>")
+
+  list(GET executables 0 executable)
+
+  cmake_path(RELATIVE_PATH CMAKE_CURRENT_BINARY_DIR BASE_DIRECTORY "${CMAKE_BINARY_DIR}" OUTPUT_VARIABLE target)
+
+  string(MAKE_C_IDENTIFIER "test_runtime_dlls_${target}" target)
+
+  add_custom_target(
+    ${target}
+    ALL
+    COMMAND "$<$<BOOL:${dlls}>:${CMAKE_COMMAND};-E;copy_if_different;${dlls};$<TARGET_FILE_DIR:${executable}>>"
+    COMMAND_EXPAND_LISTS
+    VERBATIM
+  )
+
+  add_dependencies(${target} ${executables})
 endfunction()
 
 function(add_test_executables)
