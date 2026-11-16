@@ -46,6 +46,17 @@ function(add_test_executable target)
       ${ARGV_LINK}
   )
 
+  # Windows searches the system directories before PATH, so a DLL that shares
+  # its name with a system DLL must sit next to the executable to be found.
+  if(WIN32)
+    add_custom_command(
+      TARGET ${target}
+      POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy -t $<TARGET_FILE_DIR:${target}> $<TARGET_RUNTIME_DLLS:${target}>
+      COMMAND_EXPAND_LISTS
+    )
+  endif()
+
   add_test(
     NAME ${target}
     COMMAND ${target} ${ARGV_ARGS}
@@ -57,7 +68,6 @@ function(add_test_executable target)
     PROPERTIES
       TIMEOUT ${ARGV_TIMEOUT}
       LABELS "${ARGV_LABELS}"
-      ENVIRONMENT_MODIFICATION "$<LIST:TRANSFORM,$<TARGET_RUNTIME_DLL_DIRS:${target}>,PREPEND,PATH=path_list_prepend:>"
       ${ARGV_PROPERTIES}
   )
 endfunction()
