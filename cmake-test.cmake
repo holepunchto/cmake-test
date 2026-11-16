@@ -95,7 +95,7 @@ function(copy_test_runtime_dlls)
   add_custom_target(
     ${target}
     ALL
-    COMMAND "$<$<BOOL:${dlls}>:${CMAKE_COMMAND};-E;copy_if_different;${dlls};$<TARGET_FILE_DIR:${executable}>>"
+    COMMAND "$<IF:$<BOOL:${dlls}>,${CMAKE_COMMAND};-E;copy_if_different;${dlls};$<TARGET_FILE_DIR:${executable}>,${CMAKE_COMMAND};-E;true>"
     COMMAND_EXPAND_LISTS
     VERBATIM
   )
