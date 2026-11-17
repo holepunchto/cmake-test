@@ -169,10 +169,6 @@ function(add_test_script name file)
     PARSE_ARGV 2 ARGV "" "${one_value_keywords}" "${multi_value_keywords}"
   )
 
-  if(ARGV_UNPARSED_ARGUMENTS)
-    message(FATAL_ERROR "Unknown arguments: ${ARGV_UNPARSED_ARGUMENTS}")
-  endif()
-
   if(NOT ARGV_RUNNER)
     message(FATAL_ERROR "RUNNER is required")
   endif()
