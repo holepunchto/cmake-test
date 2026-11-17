@@ -31,6 +31,10 @@ function(add_test_executable target)
     set(ARGV_WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
   endif()
 
+  # Tests link the shared library when there is one, so that its exports are
+  # tested too, and the static library otherwise.
+  list(TRANSFORM ARGV_LINK REPLACE "^(.+)::<TYPE>$" "$<IF:$<TARGET_EXISTS:\\1::shared>,\\1::shared,\\1::static>")
+
   add_executable(${target} ${ARGV_UNPARSED_ARGUMENTS})
 
   # Tests check their results with assert(), which NDEBUG would compile out.
@@ -153,6 +157,10 @@ function(add_test_executables)
 endfunction()
 
 function(add_test_script name file)
+  set(option_keywords
+    OPTIONAL
+  )
+
   set(one_value_keywords
     TIMEOUT
     WORKING_DIRECTORY
@@ -166,8 +174,16 @@ function(add_test_script name file)
   )
 
   cmake_parse_arguments(
-    PARSE_ARGV 2 ARGV "" "${one_value_keywords}" "${multi_value_keywords}"
+    PARSE_ARGV 2 ARGV "${option_keywords}" "${one_value_keywords}" "${multi_value_keywords}"
   )
+
+  if(ARGV_OPTIONAL)
+    _test_runner_exists("${ARGV_RUNNER}" exists)
+
+    if(NOT exists)
+      return()
+    endif()
+  endif()
 
   if(NOT ARGV_RUNNER)
     message(FATAL_ERROR "RUNNER is required")
@@ -203,6 +219,10 @@ function(add_test_script name file)
 endfunction()
 
 function(add_test_scripts)
+  set(option_keywords
+    OPTIONAL
+  )
+
   set(one_value_keywords
     PREFIX
     BASE_DIRECTORY
@@ -219,7 +239,7 @@ function(add_test_scripts)
   )
 
   cmake_parse_arguments(
-    PARSE_ARGV 0 ARGV "" "${one_value_keywords}" "${multi_value_keywords}"
+    PARSE_ARGV 0 ARGV "${option_keywords}" "${one_value_keywords}" "${multi_value_keywords}"
   )
 
   _resolve_test_files(files disabled)
@@ -234,6 +254,14 @@ function(add_test_scripts)
     list(APPEND forwarded_arguments ${keyword} ${ARGV_${keyword}})
   endforeach()
 
+  if(ARGV_OPTIONAL)
+    _test_runner_exists("${ARGV_RUNNER}" exists)
+
+    if(NOT exists)
+      return()
+    endif()
+  endif()
+
   foreach(file IN LISTS files)
     cmake_path(RELATIVE_PATH file BASE_DIRECTORY "${ARGV_BASE_DIRECTORY}" OUTPUT_VARIABLE name)
 
@@ -245,6 +273,32 @@ function(add_test_scripts)
 
     add_test_script("${ARGV_PREFIX}${name}" "${file}" ${forwarded_arguments} PROPERTIES ${properties})
   endforeach()
+endfunction()
+
+# Checks whether the command of a runner is a target, a file, or a program on
+# the PATH.
+function(_test_runner_exists runner result)
+  list(GET runner 0 command)
+
+  set(exists OFF)
+
+  if(TARGET ${command})
+    set(exists ON)
+  else()
+    cmake_path(ABSOLUTE_PATH command NORMALIZE OUTPUT_VARIABLE path)
+
+    if(EXISTS "${path}" AND NOT IS_DIRECTORY "${path}")
+      set(exists ON)
+    else()
+      find_program(program NAMES ${command} NO_CACHE)
+
+      if(program)
+        set(exists ON)
+      endif()
+    endif()
+  endif()
+
+  set(${result} ${exists} PARENT_SCOPE)
 endfunction()
 
 # Resolves the unparsed test files and the DISABLED files of the calling
