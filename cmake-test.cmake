@@ -10,6 +10,7 @@ function(add_test_executable target)
 
   set(multi_value_keywords
     LINK
+    EXPORTS
     ARGS
     LABELS
     PROPERTIES
@@ -49,6 +50,19 @@ function(add_test_executable target)
     PRIVATE
       ${ARGV_LINK}
   )
+
+  # Exports let code that the test loads at runtime call back into it. A lone
+  # EXPORTS exports every symbol of the test, and a list only those symbols.
+  if(ARGV_EXPORTS)
+    _export_test_symbols(${target} ${ARGV_EXPORTS})
+  elseif("EXPORTS" IN_LIST ARGV_KEYWORDS_MISSING_VALUES)
+    set_target_properties(
+      ${target}
+      PROPERTIES
+      ENABLE_EXPORTS ON
+      WINDOWS_EXPORT_ALL_SYMBOLS ON
+    )
+  endif()
 
   if(WIN32)
     get_directory_property(executables test_runtime_dll_executables)
@@ -118,6 +132,7 @@ function(add_test_executables)
   set(multi_value_keywords
     DISABLED
     LINK
+    EXPORTS
     ARGS
     LABELS
     PROPERTIES
@@ -138,6 +153,10 @@ function(add_test_executables)
 
     list(APPEND forwarded_arguments ${keyword} ${ARGV_${keyword}})
   endforeach()
+
+  if("EXPORTS" IN_LIST ARGV_KEYWORDS_MISSING_VALUES)
+    list(APPEND forwarded_arguments EXPORTS)
+  endif()
 
   foreach(source IN LISTS sources)
     cmake_path(RELATIVE_PATH source BASE_DIRECTORY "${ARGV_BASE_DIRECTORY}" OUTPUT_VARIABLE target)
@@ -273,6 +292,72 @@ function(add_test_scripts)
 
     add_test_script("${ARGV_PREFIX}${name}" "${file}" ${forwarded_arguments} PROPERTIES ${properties})
   endforeach()
+endfunction()
+
+# Exports only the given symbols from a test executable.
+function(_export_test_symbols target)
+  set(symbols ${ARGN})
+
+  set(file "${CMAKE_CURRENT_BINARY_DIR}/${target}")
+
+  set_target_properties(
+    ${target}
+    PROPERTIES
+    ENABLE_EXPORTS ON
+  )
+
+  if(WIN32)
+    set(file "${file}.def")
+
+    list(JOIN symbols "\n  " symbols)
+
+    file(CONFIGURE OUTPUT "${file}" CONTENT "EXPORTS\n  ${symbols}\n" @ONLY)
+
+    target_sources(
+      ${target}
+      PRIVATE
+        "${file}"
+    )
+  elseif(APPLE)
+    set(file "${file}.exp")
+
+    list(TRANSFORM symbols PREPEND "_")
+    list(JOIN symbols "\n" symbols)
+
+    file(CONFIGURE OUTPUT "${file}" CONTENT "${symbols}\n" @ONLY)
+
+    target_link_options(
+      ${target}
+      PRIVATE
+        "-Wl,-exported_symbols_list,${file}"
+    )
+  else()
+    set(file "${file}.dynamic")
+
+    list(JOIN symbols ";\n  " symbols)
+
+    file(CONFIGURE OUTPUT "${file}" CONTENT "{\n  ${symbols};\n};\n" @ONLY)
+
+    # Only the dynamic list decides what's exported, rather than every symbol as
+    # ENABLE_EXPORTS would otherwise export.
+    set_target_properties(
+      ${target}
+      PROPERTIES
+      ENABLE_EXPORTS OFF
+    )
+
+    target_link_options(
+      ${target}
+      PRIVATE
+        "-Wl,--dynamic-list=${file}"
+    )
+  endif()
+
+  set_target_properties(
+    ${target}
+    PROPERTIES
+    LINK_DEPENDS "${file}"
+  )
 endfunction()
 
 # Checks whether the command of a runner is a target, a file, or a program on
